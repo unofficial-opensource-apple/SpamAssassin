@@ -1,5 +1,5 @@
 #ifndef lint
-static char *RCSid() { return RCSid("$Id: amavis.c,v 1.1 2004/04/19 17:08:44 dasenbro Exp $"); }
+static char *RCSid() { return RCSid("$Id: amavis.c,v 1.2 2004/11/29 22:00:58 dasenbro Exp $"); }
 #endif
 
 /*
@@ -16,7 +16,12 @@ static char *RCSid() { return RCSid("$Id: amavis.c,v 1.1 2004/04/19 17:08:44 das
  *   Julio Sanchez
  *   Mark Martinec (2002-07-30, don't pass LDA args to amavisd,
  *                  call LDA directly)
- *
+ *   Henrique M. Holschuh
+ *      2003-08-25: bomb on argc < 2, not 3
+ *      	    fix error message when wrong no. of args
+ *      	    fix this crap to use syslog
+ *      	    log errors, otherwise nobody knows what is happening
+ *      	    change default dir to something obvious for bug reporting
  */
 
 /*
@@ -48,8 +53,9 @@ static char *RCSid() { return RCSid("$Id: amavis.c,v 1.1 2004/04/19 17:08:44 das
 #include <unistd.h>
 #include <sys/wait.h>
 #include <libgen.h>
+#include <syslog.h>
 
-#define D_TEMPLATE "/amavis-XXXXXXXX"
+#define D_TEMPLATE "/amavis-client-XXXXXXXX"
 #define F_TEMPLATE "/email.txt"
 
 #define DBG_NONE  0
@@ -61,10 +67,9 @@ static char *RCSid() { return RCSid("$Id: amavis.c,v 1.1 2004/04/19 17:08:44 das
 
 static struct utsname myuts;
 
-/* Don't debug by default */
-static const int debuglevel = DBG_NONE;
-/* static const int debuglevel = DBG_ALL; */
-static const char *mydebugfile = RUNTIME_DIR "/amavis.client";
+static const int debuglevel = DBG_FATAL;
+static char truncated[] = " (truncated)";
+#define MAX_MSG 150
 
 /* temp dir where mail message is stored */
 static char *dir_name;
@@ -74,7 +79,6 @@ static char *atmpfile;
 static size_t mystrlcpy(char *, const char *, size_t);
 static void mydebug(const int, const char *, ...);
 static char *mymktempdir(char *);
-static char *next_envelope(char *);
 static void amavis_cleanup(void);
 
 static size_t
@@ -90,48 +94,51 @@ mystrlcpy(char *dst, const char *src, size_t size)
     return src_l;
 }
 
-static void
-mydebug(const int level, const char *fmt, ...)
+/* Construct the message string from its parts */
+char *
+make_msg(const char *fmt, va_list args)
 {
-    FILE *f = NULL;
-    time_t tmpt;
-    char *timestamp;
-    int rv;
-    va_list ap;
+	int len;
+	char *msg = NULL;
+	if ( (msg = calloc(1, MAX_MSG + 1)) == NULL )
+		return NULL;
+	/* There's some confusion in the documentation about what vsnprintf
+	 * returns when the buffer overflows.  Hmmm... */
+	len = vsnprintf(msg, MAX_MSG + 1, fmt, args);
+	if (len >= MAX_MSG)
+		strcpy(msg + (MAX_MSG - 1) - sizeof(truncated), truncated);
+	return msg;
+}
+
+static void
+log(const int level, const char *fmt, va_list args)
+{
+    int loglevel=LOG_INFO;
+    char *msg;
 
     if (!(level & debuglevel))
 	return;
 
-    /* Set up debug file */
-    if (mydebugfile && (f = fopen(mydebugfile, "a")) == NULL) {
-	fprintf(stderr, "error opening '%s': %s\n", mydebugfile, strerror(errno));
-	return;
+    switch (level) {
+	case DBG_WARN: 
+		loglevel=LOG_WARNING;
+		break;
+	case DBG_FATAL: 
+		loglevel=LOG_ERR;
     }
-
-    tmpt = time(NULL);
-    timestamp = ctime(&tmpt);
-    /* A 26 character string according ctime(3c)
-     * we cut off the trailing \n\0 */
-    timestamp[24] = 0;
-    rv = fprintf(f, "%s %s amavis(client)[%ld]: ",
-    	timestamp, (myuts.nodename ? myuts.nodename : "localhost"), (long) getpid());
-    if (rv < 0)
-	perror("error writing (fprintf) to debug file");
-
-    va_start(ap, fmt);
-    rv = vfprintf(f, fmt, ap);
-    va_end(ap);
-    if (rv < 0)
-	perror("error writing (vfprintf) to debug file");
-
-    rv = fputc('\n', f);
-    if (rv < 0)
-	perror("error writing (fputc) to debug file");
-    rv = fclose(f);
-    if (rv < 0)
-	perror("error closing debug file f");
+    if ((msg = make_msg(fmt, args)) == NULL) return;
+    syslog(loglevel, "%s", msg);
 }
 
+static void
+mydebug(const int level, const char *fmt, ...)
+{
+	va_list args;
+
+	va_start(args, fmt);
+	log(level, fmt, args);
+	va_end(args);
+}
 
 static char *
 mymktempdir(char *s)
@@ -198,15 +205,15 @@ call_lda(int fdin, const char *path, char *const argv[])
     if (!pid) {  /* child */
 	int d = dup2(fdin,STDIN_FILENO);
 	if (d < 0) {
-	    fprintf(stderr, "dup2 %d failed: %s\n", fdin, strerror(errno));
+	    mydebug(DBG_FATAL, "dup2 %d failed: %s\n", fdin, strerror(errno));
 	    exit(EX_TEMPFAIL);
 	} else if (d != STDIN_FILENO) {
-	    fprintf(stderr, "dup2 %d error to stdin (got %d)\n", fdin, d);
+	    mydebug(DBG_FATAL, "dup2 %d error to stdin (got %d)\n", fdin, d);
 	    exit(EX_TEMPFAIL);
 	}
 	close(fdin);
 	execv(path, argv);
-	fprintf(stderr, "Can't exec LDA '%s': %s\n", path, strerror(errno));
+	mydebug(DBG_FATAL, "Can't exec LDA '%s': %s\n", path, strerror(errno));
 	exit(EX_TEMPFAIL);
     }
     /* parent */
@@ -254,17 +261,19 @@ main(int argc, char **argv)
 #endif
 
     atexit(amavis_cleanup);
+    openlog("amavis(client)", LOG_PID, LOG_MAIL);
 
     /* */
     uname(&myuts);
 
     /* Process args first */
-    if (argc < 3) {
-	mydebug(DBG_FATAL, "Insufficient number of arguments: %s", strerror(errno));
+    if (argc < 2) {
+	mydebug(DBG_FATAL, "Insufficient number of arguments, need sender recipient [recipient...]");
 	exit(EX_TEMPFAIL);
     }
 
-    umask(0077);
+/*  umask(0077); */
+    umask(0007);
 
     /* */
     dir_name = malloc(strlen(RUNTIME_DIR) + strlen(D_TEMPLATE) + 1);
@@ -279,7 +288,10 @@ main(int argc, char **argv)
 	mydebug(DBG_FATAL, "Failed to create temp dir: %s", strerror(errno));
 	exit(EX_TEMPFAIL);
     }
-
+    if (chmod(dir_name,S_IRWXU|S_IRWXG)) {
+	mydebug(DBG_FATAL, "Failed to chmod temp dir: %s", strerror(errno));
+	exit(EX_TEMPFAIL);
+    }
     if (lstat(dir_name, &StatBuf) < 0) {
 	mydebug(DBG_FATAL, "%s: Error while trying lstat(%s): %s",
 		argv[0], dir_name, strerror(errno));
@@ -287,14 +299,15 @@ main(int argc, char **argv)
     }
 
     /* may be too restrictive for you, but's good to avoid problems */
-    if (!S_ISDIR(StatBuf.st_mode) || StatBuf.st_uid != geteuid() ||
-	StatBuf.st_gid != getegid() || !(StatBuf.st_mode & (S_IWUSR | S_IRUSR))) {
-	mydebug(DBG_FATAL,
-		"%s: Security Warning: %s must be a Directory and owned by "
-		"User %d and Group %d and just read-/write-able by the User "
-		" and noone else. Exit.", argv[0], dir_name, geteuid(), getegid());
-	exit(EX_TEMPFAIL);
-    }
+/*  if (!S_ISDIR(StatBuf.st_mode) || StatBuf.st_uid != geteuid() ||
+ *	StatBuf.st_gid != getegid() || !(StatBuf.st_mode & (S_IWUSR | S_IRUSR))) {
+ *	mydebug(DBG_FATAL,
+ *		"%s: Security Warning: %s must be a Directory and owned by "
+ *		"User %d and Group %d and just read-/write-able by the User "
+ *		" and noone else. Exit.", argv[0], dir_name, geteuid(), getegid());
+ *	exit(EX_TEMPFAIL);
+ *  }
+ */
     /* there is still a race condition here if RUNTIME_DIR is writeable by the attacker :-\ */
 
     atmpfile = malloc(strlen(dir_name) + strlen(F_TEMPLATE) + 1);
@@ -311,7 +324,8 @@ main(int argc, char **argv)
 	exit(EX_TEMPFAIL);
     }
 
-    if ((fd = open(atmpfile, O_CREAT | O_EXCL | O_WRONLY, S_IRUSR)) < 0 || (fout = fdopen(fd, "w")) == NULL)
+    if ((fd = open(atmpfile, O_CREAT | O_EXCL | O_WRONLY,
+	    S_IRUSR|S_IWUSR|S_IRGRP)) < 0 || (fout = fdopen(fd, "w")) == NULL)
 	mydebug(DBG_FATAL, "failed to open a_tmp_file: %s", strerror(errno));
 
     while (!feof(stdin)) {

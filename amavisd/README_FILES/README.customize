@@ -1,6 +1,6 @@
 Customization of notification messages and log entries
 ======================================================
-            Mark Martinec <Mark.Martinec@ijs.si>, 2002
+            Mark Martinec <Mark.Martinec@ijs.si>, 2002, 2004
 
 Since March 2002 amavisd-new provides a way to customize e-mail notification
 messages that are sent in response to a virus (and spam) detection,
@@ -61,51 +61,95 @@ The substitution text for the following simple macros is built-in:
   %B a list of recipients to be used in 'Bcc:' header of the notification;
   (the %T, %C and %B lists are determined by each notification subroutine)
 
-  - to be used in forming a mail body:
+  - to be used in forming a mail body or log entry:
 
+  %p the current policy bank name (or empty if a built-in policy bank
+     is still in place);
   %h dns name of this host, or configurable name (variable $myhostname)
   %n amavis internal message id (as seen in log entries)
   %b message digest of mail body (MD5, hex)
-  %d RFC 2822 date-time (current time)
 
-  %m 'Message-ID' header field body
-  %j 'Subject' header field body
-  %t first entry in the 'Received' trace of the mail header
-  %H a list of all header lines (field may be wraped over more than one line);
-     this does not include the 'Return-Path:' or 'Delivered-To:' headers,
-     which would have been added (or will be added later) by the local
-     delivery agent if mail would have been delivered to a mailbox.
+  %d timestamp of the message reception - RFC 2822 local date-time format
+  %u timestamp of the message reception - Unix time (seconds since
+     1970-01-01T00:00Z as a decimal integer
+  %U timestamp of the message reception - ISO 8601 (EN 28601) UTC date-time
 
   %s original envelope sender, rfc2821-quoted and enclosed in angle brackets
-  %l (letter ell) true if sender belongs to local_domains, undef otherwise
+  %t first entry in the 'Received' trace of the mail header
+  %a original SMTP session client IP address(empty if unknown,e.g. no XFORWARD)
+  %g original SMTP session client DNS name (empty if unknown, e.g. no XFORWARD)
+  %e best guess of the originator IP address collected from the Received trace
+  %l (letter ell) true if sender is local;
+     - if SMTP client IP is known (via XFORWARD or AM.PDP from mailer), then
+       locality is determined by checking client IP address against @mynetworks
+     - if SMTP client IP is NOT provided by MTA, locality is determined by
+       comparing sender mail address to @local_domains_maps (can be faked);
   %o best attempt at determining true sender of the virus - normally same as %s
   %S address that will get sender notification;
-     this is normally a one-entry list containing sender address (%s),
+     this is normally a one-entry list containing sender address (same as %s),
      but may be unmangled/reconstructed in an attempt to undo the address
-     forging done by some viruses;
+     forging done by some viruses; in case of unkown (e.g. forged) sender
+     address, the result is empty.
 
   %R a list of original envelope recipients
      (for use in notification body, not headers)
   %D a list of recipients with successful delivery status (will get mail)
+  %O a list of recipients with unsuccessful delivery status (will not get mail)
   %N a list of recipients with UNsuccessful delivery status (will NOT get mail)
      with included short per-recipient delivery reports as used in the free
      format first MIME part of delivery status notifications
+
+  %j 'Subject' header field body
+  %m 'Message-ID' header field body
+  %r first 'Resent-Message-ID' header field body
+  %Q MTA queue ID of the message if available (Courier, sendmail milter/AM.PDP)
+  %H a list of all header lines (field may be wrapped over more than one line);
+     this does not include the 'Return-Path:' or 'Delivered-To:' headers,
+     which would have been added (or will be added later) by the local
+     delivery agent if mail would have been delivered to a mailbox.
+  %z original mail size (in bytes)
+
   %i quarantine id, e.g. name of the quarantine file, or empty ($VIRUSFILE)
   %q list of quarantine mailbox names, or empty if not quarantined
 
   %v output of the (last) virus checking program
-  %V a list of virus names found; contains at least one entry (possiby empty)
+  %V a list of virus names found; contains at least one entry (possibly empty)
      if a virus was found, otherwise a null list
   %F a list of banned file names
   %W a list of av scanner names detecting a virus
+  %X a list of header syntax violations
   %A a list SpamAssassin report lines
-  %c spam level/hits (mnemonic: sCore) as provided by SpamAssassin
+
+  %c spam level/hits (mnemonic: sCore) as provided by SpamAssassin,
+     including a per-recipient boost when used in $log_recip_templ
+     and a min of per-recipient boosts in other templates
+  %1 above tag level for any recipient?
+  %2 above tag2 level for any recipient?
+  %k any recipient declared the message be killed ?
+  %T list of triggered SA tests (only in $log_templ and $log_recip_templ)
+
+
+  - when $log_recip_templ is expanded (by-recipient log entry), certain
+    macros keep their general semantics but reflect a value for that recipient:
+
+  %. value is a recipient counter (starting by 1) when $log_recip_templ
+     is expanded, and is undef when other templates are expanded;
+  %R current recipient email address
+  %D recipient email address if mail will be delivered, otherwise empty
+  %O recipient email address if mail will NOT be delivered, otherwise empty
+  %N short DSN if mail will not be delivered for this recip, otherwise empty
+  %c spam level/hits including a per-recipient boost
+  %0 recipient email address belong to local_domains_maps: L or 0
+  %1 above tag level for this recipient:  Y or 0
+  %2 above tag2 level for this recipient: Y or 0
+  %k above kill level for this recipient: Y or 0
+
 
 The choice of capital letters for lists, and lower case letters for simple
-strings is purely a convention and is not enforced, neither does all
+strings is purely a convention and is not enforced, neither do all
 built-in macros adhere to the convention.
 
-Further builtin macros are easy to add if special need arises,
+Further built-in macros are easy to add if special need arises,
 just append new key/value pairs to the hash which is passed to expand().
 
 Besides a simple string or an array reference, a hash value may also be
@@ -122,20 +166,21 @@ The rest of this text explains what expand() does with its arguments.
 EXPAND
 
 This is a simple, yet fully fledged macro processor with proper lexical
-analysis, call stack, implied quoting levels, user supplied builtin macros,
-two builtin flow-control macros: selector and iterator, plus a macro #,
+analysis, call stack, implied quoting levels, user supplied built-in macros,
+two built-in flow-control macros: selector and iterator, plus a macro #,
 which discards input tokens until NEWLINE (like 'dnl' in m4).
 Also recognized are the usual \c and \nnn forms for specifying special
 characters, where c can be any of: r, n, f, b, e, a, t.  Lexical analysis
-of the input string is preformed only once, macro result values are not in
-danger of being lexically parsed again. No new macros can be defined by
-processing input string (at least in this version).
+of the input string is preformed only once, macro result values are not
+in danger of being lexically parsed and are treated as plain characters,
+loosing any special meaning they might have. No new macros can be defined
+by processing input string (at least in this version).
 
 Simple caller-provided macros have a single character name (usually a letter)
 and can evaluate to a string (possibly empty or undef), or an array of
 strings. It can also be a subroutine reference, in which case the subroutine
 will be called whenever macro value is needed. The subroutine must return
-a scalar: a string, or an array reference, which will be treated as if
+a scalar: a string, or an array reference. The result will be treated as if
 it were specified directly.
 
 Two forms of simple macro calls are known: %x and %#x (where x is a single
@@ -146,11 +191,11 @@ letter macro name, i.e. a key in a user-supplied hash):
   %#x  evaluates to a number: if the macro value is a scalar, returns 0
        for all-whitespace value, and 1 otherwise. If a value is an array ref,
        evaluates to the number of elements in the array.
-The simple macro is evaluated only in nonquoted context, i.e. top-level
+A simple macro is evaluated only in non-quoted context, i.e. top-level
 text or in the first argument of a selector (see below). A literal percent
 character can be produced by %% or \%.
 
-More powerful expansion is provided by two builtin macros, using syntax:
+More powerful expansion is provided by two built-in macros, using syntax:
   [? arg1 | arg2 | ... ]    a selector
   [  arg1 | arg2 | ... ]    an iterator
 where [, [?, | and ] are required tokens. To take away the special meaning
@@ -167,8 +212,8 @@ If it is a non-numeric string, it is treated as 0 for all-whitespace, and
 as 1 otherwise. Value 0 selects the very next (second) argument, value 1
 selects the one after it, etc. If the value is greater than the number
 of available arguments, the last one is selected. If there is only one
-alternative available but the value is greater than 0, an empty string
-is returned.
+(the first) alternative available but the value is greater than 0, an empty
+string is returned.
   Examples:
     [? 2   | zero | one | two | three ]  -> two
     [? foo | none | any | two | three ]  -> any
@@ -176,7 +221,7 @@ is returned.
     [? 2   |No recipients]               -> (empty string)
     [? %#R |No recipients|One recipient|%#R recipients]
     [? %q  |No quarantine|Quarantined as %q]
-Note that a selector macro call can be used as a form of if-then-else,
+Note that a selector macro call can be considered a form of if-then-else,
 except that the 'then' and 'else' parts are swapped!
 
 ITERATOR in its full form takes three arguments (and ignores any extra
@@ -206,7 +251,7 @@ in the body.
     ]          same thing: a newline-separated list of virus names
 
     [
-        %V]    a list of virus names, each preceeded by NL and spaces
+        %V]    a list of virus names, each preceded by NL and spaces
 
     [ %R |%s --> <%R>|, ]  a comma-space separated list of sender/recipient
                name pairs where recipient is iterated over the list

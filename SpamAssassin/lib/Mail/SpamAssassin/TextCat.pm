@@ -1,16 +1,18 @@
-#
-# Copyright (C) 1997  Gertjan van Noord <vannoord@let.rug.nl>
-# (original author)
-#
-# TextCat is located at http://odur.let.rug.nl/~vannoord/TextCat/
-#
-# Copyright (C) 2002  Daniel Quinlan
-# (adapted for spamassassin, performance optimizations)
-#
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of either the Artistic License or the GNU General
-# Public License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
+# <@LICENSE>
+# Copyright 2004 Apache Software Foundation
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# </@LICENSE>
 
 package Mail::SpamAssassin::TextCat;
 
@@ -22,7 +24,6 @@ use vars qw(
 );
 
 my @nm;
-my $non_word_characters='0-9\s';
 
 # settings
 $opt_a = 10;
@@ -47,12 +48,12 @@ $opt_u = 1.05;
 #         values are 1.05 or 1.1.
 
 sub classify {
-  my ($self, $input) = @_;
+  my ($self, $inputptr, $languages_filename) = @_;
   my %results;
   my $maxp = $opt_t;
 
   # create ngrams for input
-  my @unknown = create_lm($input);
+  my @unknown = create_lm($inputptr);
 
   # load language models once
   if (! @nm) {
@@ -60,7 +61,12 @@ sub classify {
     my $ngram = {};
     my $rang = 1;
     dbg("Loading languages file...");
-    open(LM, $self->{main}->{languages_filename})
+
+    if (!defined $languages_filename) {
+      return;
+    }
+
+    open(LM, $languages_filename)
 	|| die "cannot open languages: $!\n";
     local $/ = undef;
     @lm = split(/\n/, <LM>);
@@ -116,20 +122,20 @@ sub create_lm {
   my %ngram;
   my @sorted;
 
-  ($_) = @_;
-
-  for (split("[$non_word_characters]+")) {
-    $_ = "\000" . $_ . "\000";
-    my $len = length($_);
+  # my $non_word_characters = qr/[0-9\s]/;
+  for my $word (split(/[0-9\s]+/, ${$_[0]}))
+  {
+    $word = "\000" . $word . "\000";
+    my $len = length($word);
     my $flen = $len;
     my $i;
     for ($i = 0; $i < $flen; $i++) {
       $len--;
-      $ngram{substr($_, $i, 1)}++;
-      ($len < 1) ? next : $ngram{substr($_, $i, 2)}++;
-      ($len < 2) ? next : $ngram{substr($_, $i, 3)}++;
-      ($len < 3) ? next : $ngram{substr($_, $i, 4)}++;
-      if ($len > 3) { $ngram{substr($_, $i, 5)}++ };
+      $ngram{substr($word, $i, 1)}++;
+      ($len < 1) ? next : $ngram{substr($word, $i, 2)}++;
+      ($len < 2) ? next : $ngram{substr($word, $i, 3)}++;
+      ($len < 3) ? next : $ngram{substr($word, $i, 4)}++;
+      if ($len > 3) { $ngram{substr($word, $i, 5)}++ };
     }
   }
 

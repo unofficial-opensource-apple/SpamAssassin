@@ -14,45 +14,40 @@ AMaViS & sendmail
 Scanning only incoming mail
 ---------------------------
 
-  The amavis script is designed to be used in the sendmail.cf configuration
-file in a similar way to how tcpd is used in /etc/inetd.conf.  An example
-is probably the best way to show this:
+The amavis script is designed to be used in the sendmail.cf configuration
+file in a similar way to how tcpd is used in /etc/inetd.conf.
 
-  A normal local delivery agent:
+Amavis helper program receives sender ($f) and recipients ($u) from the
+command line, and the other arguments after '--' should be the original
+local delivery agent with original arguments.  Amavis will run the original
+command after scanning for viruses if mail is clean.
 
-Mlocal, P=/bin/mail.local, F=lsDFMAw5:/|@qrmn9, S=10/30, R=20/40,
-        T=DNS/RFC822/X-Unix,
-        A=mail -d $u
-
-  Modified:
-
-Mlocal, P=/usr/sbin/amavis, F=lsDFMAw5:/|@qrn9, S=10/30, R=20/40,
-        T=DNS/RFC822/X-Unix,
-        A=amavis $f $u -- /bin/mail.local -d $u
-
-  Note that m (delivery to multiple recipients) has been removed from the
-F equate! Amavis receives sender ($f) and recipient ($u) from the command
-line, and the other arguments should be the original local delivery agent
-with original arguments.  Amavis will run the original command after scanning
-for viruses.
-
-[Update: this *may* work now with amavis-perl-11. In my tests I couldn't
-get that working (Rainer).]
-
-[I don't think it is still necessary to remove the 'm' option when
-used with amavisd-new (Mark Martinec).]
-
-  As most people generate sendmail.cf from a m4 file (we assume sendmail.mc),
+As most people generate sendmail.cf from a m4 file (we assume sendmail.mc),
 you should add the following just before the MAILER definitions:
 
-dnl
-dnl Change Mlocal to use AMaViS-Perl
-define(`LOCAL_MAILER_PATH', `/usr/sbin/amavis')dnl
-define(`LOCAL_MAILER_ARGS', CONCAT(`amavis $f $u -- /usr/bin/',
-LOCAL_MAILER_ARGS))dnl
-dnl please set the path to your procmail accordingly!
-dnl the following works only with sendmail 8.10.x or above
-MODIFY_MAILER_FLAGS(`LOCAL', `-m')dnl
+MODIFY_MAILER_FLAGS(`LOCAL',`-r')dnl
+define(`LOCAL_MAILER_ARGS',`amavis $f $u --' LOCAL_MAILER_PATH `-d $u')dnl
+define(`LOCAL_MAILER_PATH',`/usr/local/sbin/amavis')dnl
+
+The resulting Mlocal mailer entry could look like:
+
+Mlocal,	P=/usr/local/sbin/amavis, F=lsDFMAw5:/|@qPmn9S,
+	S=EnvFromL/HdrFromL, R=EnvToL/HdrToL,
+	T=DNS/RFC822/X-Unix, U=root:amavis,
+	A=amavis $f $u -- /usr/libexec/mail.local -d $u
+
+The user and group may be specified with the U option to the mailer.
+The group name in 'U=root:amavis' should match the chosen group name
+of the daemon amavisd(-new).
+
+This setup is probably the trickiest of them all to get right
+because of the conflicting daemon UID and file permission requirements
+of the different components in play. The amavisd daemon should not be
+running as root for security reasons, whereas the mail.local LDA needs
+privileges to access user mailboxes. Running amavis helper program
+as root:amavis retains root privileges for the helper program, while
+still alowing amavisd daemon process to access the temporary directory
+in the same group, even if not running as root.
 
 
 Scanning incoming/outgoing and relayed mail
@@ -103,8 +98,8 @@ R$*[tab][tab]$#amavis $:$1
 #R$*[tab][tab]$: $>Parse1 $1[tab][tab]final parsing  
 
 Add the new mailer definition:
-Mamavis,	P=/usr/sbin/amavis, F=mlsACDFMS5:/|@qhP, S=0, R=0,
-		T=DNS/RFC822/X-Unix, U=amavis,
+Mamavis,	P=/usr/sbin/amavis, F=nmlsACDFMS5:/|@qhP, S=0, R=0,
+		T=DNS/RFC822/X-Unix, U=amavis:amavis,
 		A=amavis $f $u
 
 [Step 3, with older amavis: do a ./configure --enable-relay --enable-sendmail, 
@@ -199,10 +194,9 @@ is owned by amavis:amavis
 
 
 * I use the following mailer defintion
-Mamavis,        P=/usr/sbin/amavis, F=mlsACDFMS5:/|@qhP, S=0, R=0,
-                T=DNS/RFC822/X-Unix, U=amavis,
-                A=amavis $f $u,
-                U=amavis:amavis
+Mamavis,        P=/usr/sbin/amavis, F=nmlsACDFMS5:/|@qhP, S=0, R=0,
+                T=DNS/RFC822/X-Unix, U=amavis:amavis,
+                A=amavis $f $u
 
 
 /etc/sendmail.orig.cf:
@@ -239,10 +233,9 @@ AMaViS is run as user amavis, group amavis.
 
 
 * I use the following mailer defintion
-Mamavis,        P=/usr/sbin/amavis, F=mlsACDFMS5:/|@qhP, S=0, R=0,
-                T=DNS/RFC822/X-Unix,
-                A=amavis $f $u,
-                U=amavis:amavis
+Mamavis,        P=/usr/sbin/amavis, F=nmlsACDFMS5:/|@qhP, S=0, R=0,
+                T=DNS/RFC822/X-Unix, U=amavis:amavis,
+                A=amavis $f $u
 
 
 Note: The following entry does *NOT* work
@@ -317,8 +310,7 @@ TODO/BUGS
 The author
 ----------
 This stuff was written and tested by Rainer Link
-Rainer Link <link@suse.de>
-http://rainer.w3.to/
+Rainer Link <link@suse.de>, http://rainer.w3.to/
 
 
 Credits
@@ -327,6 +319,7 @@ This stuff is based on a patch from gody@master.slon.net and is itself
 based on the concept from Inflex. Thanks to Paul L. Daniels and
 (indirectly) to Steve Kehelet via the P.L.Daniels's Inflex scanner.
 Thanks to Yan Seiner for the m4 stuff, which our amavis.m4 is based upon.
+Section 'Scanning only incoming mail' updated by Mark Martinec.
 
 
 Thanks

@@ -280,20 +280,9 @@ AC_OUTPUT(Makefile)
 
 
 
-if test "$AMAVISUSER" != "" ; then
-   id $AMAVISUSER > /dev/null 2>&1
-   if test "$?" != 0 ; then
-      echo ""
-      echo "Note:  The Amavis user '$AMAVISUSER' does not seem to"
-      echo "exist.  Please create this user before continuing."
-   fi
-fi
-
 if test "$SENDMAILPROG" != "no" ; then
         sendmailversion=`$SENDMAILPROG -bv -d0.1 | $AWK '/Version/ {print $2}'`
         echo ""
-        echo "Note: sendmail version $sendmailversion detected"
-        echo "check http://www.sendmail.org/~ca/email/sm-812.html for sendmail bugs and patches"
-        echo "It's advised to run sendmail latest versions when using MILTER"
+        echo "Info: sendmail version $sendmailversion detected"
         echo ""
 fi

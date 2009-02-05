@@ -7,5 +7,7 @@ Instead, feed them to sendmail (or its lookalike):
 $ sendmail -i your-address@example.com <sample-virus-simple.txt
 $ sendmail -i your-address@example.com <sample-virus-nested.txt
 $ sendmail -i your-address@example.com <sample-nonspam.txt
-$ sendmail -i your-address@example.com <sample-spam.txt
+$ sendmail -i your-address@example.com <sample-spam-GTUBE-junk.txt
+$ sendmail -i your-address@example.com <sample-spam-GTUBE-nojunk.txt
+$ sendmail -i your-address@example.com <sample-spam.txt   # old sample
 $ sendmail -i your-address@example.com <sample-42-mail-bomb.txt

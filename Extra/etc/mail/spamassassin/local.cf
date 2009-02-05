@@ -31,7 +31,7 @@ use_bayes 1
 ok_locales en
 
 # OK languages
-ok_languages en
+ok_languages en fr de ja
 
 # Required hits to be marked as spam
 required_hits 6

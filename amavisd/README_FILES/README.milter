@@ -1,3 +1,12 @@
+NOTE:
+  these instructions describe the amavisd-0.1 installation,
+  but apply in large degree to amavisd-new as well.
+
+  Don't forget to set the $forward_method to undef
+  in amavisd.conf, and adjust the $notify_method.
+  Also, the $final_*_destiny may use D_REJECT if desired.
+
+
 How To use AMaViS With sendmail/libmilter
 *****************************************
 
@@ -7,24 +16,26 @@ General Notes
 By Rob MacGregor <rob.macgregor@techie.com>
 
 SECURITY
-   MILTER is designed such that milter applications do not need to run as 
-   root.  By not running amavis as root you improve security.  Simply put, 
-   nothing that can run as an account other than root should be run as root.
+   MILTER is designed such that milter applications do not need to 
+   run as root.  By not running amavis as root you improve security. 
+   Simply put, nothing that can run as an account other than root 
+   should be run as root.
 
-   However, it's important to ensure that you run your virus scanners and both 
-   parts of amavis (amavisd and amavis-milter) as the same group.  It's worth 
-   giving daemonised virus scanners a different account, just to reduce the 
-   chance that the scanner modifies the message.  If you don't do this then 
-   you'll run into permission problems.  The account that you run amavis as 
-   *MUST* own the /var/amavis directory and the quarantine directory 
-   (usually /var/virusmails).
+   However, it's important to ensure that you run your virus scanners 
+   and both parts of amavis (amavisd and amavis-milter) as the same 
+   group.  It's worth giving daemonised virus scanners a different 
+   account, just to reduce the chance that the scanner modifies the 
+   message.  If you don't do this then you'll run into permission 
+   problems.  The account that you run amavis as *MUST* own the 
+   /var/amavis directory and the quarantine directory (usually 
+   /var/virusmails).
 
    Now, create the following account for amavisd and amavis milter:
 
          amavis (group amavis)
 
-   If you use daemonised virus scanners then it is worth creating a separate
-   account for them:
+   If you use daemonised virus scanners then it is worth creating a 
+   separate account for them:
 
          vscan (group amavis)
 
@@ -33,8 +44,35 @@ GENERAL
          http://www.amavis.org/amavis-faq.php3
    and the list archive at:
          http://marc.theaimsgroup.com/?l=amavis-user&r=1&w=2
-   before asking questions on the list.  It's highly likely somebody has 
-   already come across the same problem and it's been solved.
+   before asking questions on the list.  It's highly likely somebody 
+   has already come across the same problem and it's been solved.
+
+   Oh, and don't forget to RTFM :-)
+
+SOCKETS
+   Amavis uses 2 sockets for communications.  One is for communication
+   between sendmail and amavis-milter process (amavis-milter.sock).
+   The protocol spoken over this socket is MILTER.
+
+   The other is for communication between the 2 parts of amavis
+   (amavisd.sock), i.e. between amavis-milter process and amavisd daemon.
+   A protocol over this socket is _not_ MILTER, but a private amavis
+   protocol.
+
+   The first socket is fixed and cannot be changed (short of editing
+   the source).  The second can be changed by the configure command.
+   However if you set it to the same as the sendmail-amavis socket
+   strange things will happen.  You should receive a message in the 
+   log of amavisd-new that indicates what the problem is, e.g.:
+     RX_tempdir FAILED, retry: Invalid temporary directory '\000\000\000\rO'.
+   Other versions of amavis may not produce any such warnings.
+
+   The short version is:
+
+      1) Don't change the socket details unless you know what you're
+         doing.
+      2) If you do change the socket name, don't use the name of the
+         other socket.
 
 CENTRALISING SCANNING (From Dibo <dibo@users.sourceforge.net>)
     If you want to place milter-amavis along with amavis daemon
@@ -49,13 +87,15 @@ CENTRALISING SCANNING (From Dibo <dibo@users.sourceforge.net>)
       and substituting host name or IP address in place of 'hostname'
       to specify the host on which milter-amavis daemon is running)
 
-    - when starting milter-amavis process, change the value of its option -p:
+    - when starting milter-amavis process, change the value of 
+      it's option -p:
         replace   -p local:/var/amavis/amavis-milter.sock
         with:     -p inet:port@0.0.0.0
 
       (substituting 'port' with your chosen port number,
-      and optionally limiting the bind address (0.0.0.0) with the desired
-      interface, e.g. 127.0.0.1 to limit bind to the loopback address)
+      and optionally limiting the bind address (0.0.0.0) with the
+      desired interface, e.g. 127.0.0.1 to limit bind to the 
+      loopback address)
 
 
 Sendmail 8.12.x
@@ -63,246 +103,201 @@ Sendmail 8.12.x
 
 By Rob MacGregor <rob.macgregor@techie.com>
 
-NOTE: Sendmail versions before 8.12.4 have problems with the milter interface.  
-      Please ensure you're using the most current sendmail version (8.12.5 at
-      the time of writing).
+NOTE: Ensure you're running Sendmail 8.12.10 or later.  Earlier 
+      versions all have a remotely exploitable vulnerability
+      (see CERT Advisory CA-2003-25 and other advisories).
 
 Add the following to <sendmail source>/devtools/Site/site.config.m4:
 
 	APPENDDEF(`confENVDEF', `-DMILTER')
 
-Then build sendmail.  If you've already built sendmail clean the old tree by 
-doing "rm -fr obj.*" in the sendmail source directory, or run "./Build -c".  
-Once sendmail has finished building go into the following directories under 
-the sendmail source directory and do a make and make install:
+Then build sendmail.  If you've already built sendmail, clean the old 
+tree by doing "rm -fr obj.*" in the sendmail source directory, or run 
+"./Build -c".  Once sendmail has finished building go into the 
+following directories under the sendmail source directory and do a 
+"make" and "make install":
 
 	libmilter
 	libsm
 	libsmutil
 
-Copy the .a files from under obj.*/lib* to somewhere the linker can find them 
-(/usr/local/lib or similar).  You may also need to copy the header files from 
-<sendmail source>/include/libmilter to an appropriate location 
-(eg /usr/local/include/libmilter).
+Copy the .a files from under obj.*/libsm and obj.*/libsmutil to 
+somewhere the linker can find them (/usr/lib, /usr/local/lib or 
+similar).
 
 
 Building AMAVIS(d)
 ==================
 
-Please follow the instructions in INSTALL and helper-progs/README.
+IMPORTANT: Versions of AMAVISd before 0.1 use a different configure 
+	command line.  If you're running an older version then UPGRADE.
+
+Assuming you've copied the libraries to /usr/lib configure amavis(d) 
+with "--enable-milter --with-milter-includes=/usr/include 
+--with-milter-libs=/usr/lib" DO NOT USE the "--enable-relay", 
+"--enable-smtp" or "--with-origconf" options.
+
+IMPORTANT: Unless you REALLY understand EXACTLY what you're doing,
+	leave the --with-sockname option alone.  The default is correct
+	and changing it may cause you problems.
+
+When you run configure check that you see the following lines:
+
+	checking for sm_errstring in -lsm... yes
+	checking for sm_strlcpy in -lsm... yes
+	checking for libmilter/mfapi.h... yes
+	checking for smfi_main in -lmilter... yes
+	We will use libmilter as the MTA
+
+The summary should include:
+
+	Configured for use with:    libmilter
+	Configuration type:         sendmail/milter
+
+If you don't see this, check that you've put the libmilter.a, libsm.a 
+and libsmutil.a files in a location the linker can find (see above).  
+Check that you've specified the correct paths to the libraries and 
+header files.
+
+For building amavisd-new, see files README, INSTALL, and
+helper-progs/README in its distribution.
 
 
 Finishing Sendmail 8.12.x
 =========================
 
-In the sendmail.mc file add the following TWO lines:
+In the sendmail.mc file add the following two entries (the first one
+is mandatory):
 
-	define(`MILTER', 1)
-	INPUT_MAIL_FILTER(`milter-amavis', `S=local:/var/amavis/amavis-milter.sock, F=T, T=S:10m;R:10m;E:10m')
+	INPUT_MAIL_FILTER(`milter-amavis',
+	    `S=local:/var/amavis/amavis-milter.sock, F=T, T=S:10m;R:10m;E:10m')
+	define(`confMILTER_MACROS_ENVFROM',
+	    confMILTER_MACROS_ENVFROM``, {b}'')dnl # supply macro {b} to helper
 
-NOTE: If you're running with MIMEDefang you should put the amavis filter
-      AFTER the MIMEDefang one.  Putting the amavis entry first may result
-      in non-delivery of email.
+Now rebuild your sendmail.cf file and install it (usually 
+/etc/mail/sendmail.cf).
 
-Now rebuild your sendmail.cf file and install it (usually /etc/mail/sendmail.cf).
+Start amavisd and then sendmail.  Below is a suitable amavis startup 
+script for a Linux type system.  Check syslog for messages (probably 
+/var/log/mail or /var/log/mail/info).  You should see something like:
 
-Start amavisd and then sendmail.  Below are suitable scripts for a non-BSD 
-type system.  Check syslog for messages (probably /var/log/mail or 
-/var/log/mail/info).  You should see something like:
+Oct 18 16:45:19 host amavis[24606]: starting.  amavisd 0.1 Sat Jul 28 10:03:56 UTC 2001
+Oct 18 16:45:20 host sm-msp-queue[24618]: starting daemon (8.12.9): queueing@01:00:00
+Oct 18 16:45:26 host sm-mta[24631]: starting daemon (8.12.9): SMTP+queueing@01:00:00
 
-Oct 18 16:45:13 host sendmail[24584]: /etc/mail/aliases: 25 aliases, longest 10 bytes, 348 bytes total
-Oct 18 16:45:19 host amavis[24606]: starting.  amavisd snapshot-20010714 Sat Jul 28 10:03:56 UTC 2001
-Oct 18 16:45:20 host sm-msp-queue[24618]: starting daemon (8.12.1): queueing@01:00:00
-Oct 18 16:45:26 host sm-mta[24631]: starting daemon (8.12.1): SMTP+queueing@01:00:00
+The following options can be passed to amavis-milter (0.1.1 or later) 
+to change the default behaviour:
+
+    -x            From 0.1.1 this DISABLES the X_HEADER insertion.
+    -d            Disable automatic daemonising of the client.
+			All logging is now performed to stderr instead of stdout.
+    -v            Increases the verbosity of the logging, can be repeated
+                  for greater verbosity
+    -g <group>    Sets the group the client runs as (the amavis account,
+                  or your chosen account, MUST be a member of this group).
+                  Normally this group will be "smmsp".  This is designed
+                  for when you run sendmail as non-root and isn't
+                  normally required.  See the amavis-milter(1) man page
+                  for full details.
 
 
->>>START /etc/init.d/amavisd>>>
+PERFORMANCE NOTES
+=================
+
+Ok, strictly speaking generic, but always useful.
+
+You can (possibly) boost performance in a number of simple ways:
+
+   * Use a daemonised scanner.  This way a new copy of the scanner doesn't
+     have to be launched for every message.  Examples include Sophos+Sophie,
+     Trend+Trophie and ClamAV.
+
+   * Use separate disks/controllers for the amavis spool (/var/amavis) and
+     the sendmail spool (/var/spool/...).
+
+   * Put amavis on another system (assuming you've got a fast network).  This
+     is particularly useful if your mail server is already I/O or processor
+     bound.
+
+   * Use memory based file systems (TMPFS in Linux and Solaris, MFS in 
+     (Free)BSD) for the amavis spool (/var/amavis).  Don't do this for the 
+     quarantine directory and don't do it for the sendmail spool without 
+     reading the tuning section in the Sendmail (Bat) book (3rd edition) 
+     by O'Reilly.
+
+   * It's worth doing some simple checks to see if you're running out of
+     memory or maxing out the processor or disk I/O.  The "top" command
+     gives you a start on gathering this information.
+
+
+>>>START /etc/rc.d/init.d/amavisd (or wherever it lives on your system)>>>
 #!/bin/sh
 #
-# Source function library.
-. /etc/rc.d/init.d/functions
-
-# Source networking configuration.
-. /etc/sysconfig/network
+# chkconfig: 2345 70 30
+# description: AMAVISd is an anti-virus scanning interface for \
+#		common mail servers.
 
 # Source amavis configureation.
 if [ -f /etc/sysconfig/amavis ] ; then
         . /etc/sysconfig/amavis
+    else
+        AMAVIS_ACCOUNT=amavis
+        MILTER_SOCKET=/var/amavis/amavis-milter.sock
+        MILTER_FLAGS=""		# Set the options you want passed to amavis-milter
 fi
-
-# Check that networking is up.
-[ ${NETWORKING} = "no" ] && exit 0
-
-[ -f /usr/sbin/amavis-milter ] || exit 0
-
-RETVAL=0# See how we were called.
-case "$1" in
-  start)
-        # Start daemons.
-        echo -n "Starting amavis-milter: "
-        rm -fr /var/amavis/amavis*.sock
-        nohup su - amavis << EOM
-/usr/sbin/amavis-milter -p \
-			local:/var/amavis/amavis-milter.sock >/dev/null 2>&1 &
-EOM
-        sleep 3
-        daemon su - amavis -c /usr/sbin/amavisd
-        RETVAL=$?
-        echo
-        [ $RETVAL -eq 0 ] && touch /var/lock/subsys/amavis
-        ;;
-  stop)
-        # Stop daemons.
-        echo -n "Shutting down amavis-milter: "
-        killproc amavis-milter
-        killproc amavisd
-        RETVAL=$?
-        echo
-        [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/amavis
-        ;;
-  restart|reload)
-        $0 stop
-        $0 start
-        RETVAL=$?
-        ;;
-  status)
-        status amavis-milter
-        RETVAL=$?
-        ;;
-  *)
-        echo "Usage: amavis {start|stop|restart|status}"
-        exit 1
-esac
-<<<END<<<
-
-
->>>START /etc/init.d/sendmail>>>
-#!/bin/sh
-#
-# Source function library.
-. /etc/rc.d/init.d/functions
-
-# Source networking configuration.
-. /etc/sysconfig/network
-
-# Source sendmail configureation.
-if [ -f /etc/sysconfig/sendmail ] ; then
-        . /etc/sysconfig/sendmail
-else
-        DAEMON=yes
-        QUEUE=1h
-fi
-
-[ -f /usr/sbin/sendmail ] || exit 0
-
-RETVAL=0
 
 # See how we were called.
 case "$1" in
   start)
         # Start daemons.
-
-        # Start amavisd if required
-        if [ -f /etc/rc.d/init.d/amavis -a ! -f /var/amavis/amavisd.pid ]; then
-                /etc/rc.d/init.d/amavis start
-        fi
-
-        # Start sendmail
-        echo -n "Starting sendmail client queue manager: "
-        daemon /usr/sbin/sendmail -L sm-msp-queue -Ac $([ -n "$QUEUE" ] \
-					&& echo -q$QUEUE)
-        echo
-
-        echo -n "Starting sendmail sm-mta: "
-        daemon /usr/sbin/sendmail -L sm-mta $([ "$DAEMON" = yes ] && \
-					echo -bd) $([ -n "$QUEUE" ] && echo -q$QUEUE)
+        echo -n "Starting amavis-milter: "
+        rm -fr /var/amavis/amavis*.sock
+        su - ${AMAVIS_ACCOUNT} -c "/usr/sbin/amavis-milter ${MILTER_FLAGS} -p local:${MILTER_SOCKET}"
+        sleep 3
+        su - ${AMAVIS_ACCOUNT} -c /usr/sbin/amavisd
         RETVAL=$?
-        echo
-        [ $RETVAL -eq 0 ] && touch /var/lock/subsys/sendmail
+        if [ $RETVAL -eq 0 ]; then 
+                echo " [  OK  ] "
+                touch /var/lock/subsys/amavis
+            else
+                echo " [ FAIL ] "
+        fi
         ;;
   stop)
         # Stop daemons.
-        echo -n "Shutting down sendmail: "
-        kill `cat /var/spool/clientmqueue/sm-client.pid|head -1`
-        killproc sendmail
-        RETVAL=$?
-        echo
-        [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/sendmail
+        echo -n "Shutting down amavis-milter: "
+        if [ -f /var/amavis/amavisd.pid ]; then
+                kill `cat /var/amavis/amavisd.pid`
+
+                # *** PAY ATTENTION ***
+                # pkill only seems to exist in LINUX, whereas the -m option to killall only exists in BSD.
+                # You may have to modify the following commands depending on your system.
+                if [ -e /usr/bin/pkill ]; then
+                        /usr/bin/pkill amavis-milter
+                    else
+                        killall -m amavis-milter
+                fi
+                echo " [  OK  ] "
+            else
+                echo " [ FAIL ] "
+        fi
+
+        rm -f /var/lock/subsys/amavis
         ;;
   restart|reload)
         $0 stop
         $0 start
         RETVAL=$?
         ;;
-  status)
-        status sendmail
-        RETVAL=$?
-        ;;
   *)
-        echo "Usage: sendmail {start|stop|restart|status}"
+        echo "Usage: amavis {start|stop|restart}"
         exit 1
 esac
-
-exit $RETVAL
 <<<END<<<
-
-
-Sendmail 8.10.x and 8.11.x
-==========================
-
-By Geoff Winkless <gwinkless@users.sourceforge.net>
-
-  To try it, you'll need to compile sendmail with the libmilter support turned
-on, then add the following to sendmail.cf
-
-in the options section:
-O InputMailFilters=milter-amavis
-
-and in the mailers section at the bottom:
-Xmilter-amavis, S=local:/var/amavis/amavis-milter.sock, F=T, T=S:10m;R:10m;E:10m
-
-If you prefer the m4 approach, add 
-define(`_FFR_MILTER', `1')dnl
-INPUT_MAIL_FILTER(`milter-amavis', `S=local:/var/amavis/amavis-milter.sock, F=T, T=S:10m;R:10m;E:10m')dnl
-
-to your .mc file. For details please see reference page[1].
-
-*NB* These settings are the ones we recommend you use, but you may wish to
-change the values for S,R,E and perhaps add C. There is more information in
-the readme included with sendmail in the libmilter directory. This readme
-also explains the F= equate.
-
-  To compile the amavis-milter client, configure must be able to find the
-libmilter includes and libraries. The milter libraries (libmilter,
-libsmutil) must be installed where the linker can find them. If the
-libmilter includes are not in the compiler's include search path, their
-location can be passed to configure using --with-sendmail-source=DIR,
-where DIR is the sendmail source directory. configure will then add
-DIR/include to the include file search path.
-
-To start amavisd with milter support, use this sequence:
-
-su - amavis -c << EOM
-/usr/sbin/amavis-milter -D -p /var/amavis/amavis-milter.sock &
-/usr/sbin/amavisd
-EOM
-
-The -D option is necessary to cause amavis-milter to put itself into the
-background correctly and act as a daemon.  In the future, this may become
-the default behavior.
-
-You can watch for messages from amavisd in /var/log/maillog (or wherever
-syslog is configured to send mail.* messages on your system).  If you
-specify the optional -d <n> flag to amavis-milter, where 1<=n<=4,
-amavis-milter will log to /var/amavis/amavis.client in addition to sending
-messages to /var/log/messages (or wherever syslog is configured to send
-most error messages).
-
-
 
 References:
 [1] http://www.sendmail.com/partner/resources/development/milter_api/installation.html
 
 
-          Updated 8 August 2002 by Rob MacGregor <rob.macgregor@techie.com>
-          Last updated 27 December 2002 by Mark Martinec       	  
+        Last updated 3 October 2003 by Rob MacGregor <rob.macgregor@techie.com>
+        Last updated 8 March 2004 by Mark Martinec (added milter macro {b})

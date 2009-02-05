@@ -4,6 +4,12 @@
 +======================================================================+
 
 
+
+See also:
+  http://ente.limmat.ch/linux/exim_v3_-_amavisd-new.html
+  http://bugs.debian.org/213422
+
+
 How To Use AMaViS With exim
 ***************************
 
@@ -23,23 +29,33 @@ trusted_users = amavis
 (or, if this line already exists simply add amavis, separated with a
 colon).
 
-In the TRANSPORT CONFIGURATION, add the following. Note that the -f
-and -d switches are fully optional and can be omitted.
+In the TRANSPORT CONFIGURATION, add the following:
 
 amavis:
-  driver = pipe
-  command = "/usr/sbin/amavis -f <${sender_address}> -d ${pipe_addresses}"
-  prefix =
-  suffix =
-  check_string =
-  escape_string =
-# for debugging change return_output to true
-  return_output = false
-  return_path_add = false
-  user = amavis
-  group = amavis
-  path = "/bin:/sbin:/usr/bin:/usr/sbin"
-  current_directory = "/var/amavis"
+   driver = smtp
+   port = 10024
+   hosts = 127.0.0.1
+   allow_localhost
+
+Here below is an old variant of a transport which uses a pipe to a helper
+program amavis(.c). As feeding to amavisd-new with SMTP is easier and
+possibly faster, the pipe via helper setup is not recommended - it is
+included here for the curious:
+
+# amavis:
+#   driver = pipe
+#   command = "/usr/sbin/amavis <${sender_address}> ${pipe_addresses}"
+#   prefix =
+#   suffix =
+#   check_string =
+#   escape_string =
+# # for debugging change return_output to true
+#   return_output = false
+#   return_path_add = false
+#   user = amavis
+#   group = amavis
+#   path = "/bin:/sbin:/usr/bin:/usr/sbin"
+#   current_directory = "/var/amavis"
 
 At the *beginning* of the DIRECTORS CONFIGURATION, add the following:
 
@@ -130,18 +146,26 @@ After the
 remote_smtp:
   driver = smtp
 
-entry add the following entry
+entry, add the following entry
 
 amavis:
-  driver = pipe
-  command = "/usr/sbin/amavis -f <${sender_address}> -d ${pipe_addresses}"
-# for debugging change return_output to true
-  return_output = false
-  return_path_add = false
-  user = amavis
-  group = amavis
-  path = "/bin:/sbin:/usr/bin:/usr/sbin"
-  current_directory = "/var/amavis"
+   driver = smtp
+   port = 10024
+   hosts = 127.0.0.1
+   allow_localhost
+
+Or the old variant via pipe to amavis(.c) helper program (not recommended):
+
+# amavis:
+#   driver = pipe
+#   command = "/usr/sbin/amavis <${sender_address}> ${pipe_addresses}"
+# # for debugging change return_output to true
+#   return_output = false
+#   return_path_add = false
+#   user = amavis
+#   group = amavis
+#   path = "/bin:/sbin:/usr/bin:/usr/sbin"
+#   current_directory = "/var/amavis"
 
 
 (based on a mail to exim-users by Niels Dettenbach)
@@ -227,3 +251,6 @@ WWW: <a href="http://rainer.w3.to">http://rainer.w3.to</a>
 
 Please send bug reports, questions, suggestions and more directly to
 the author. Thanks :-)
+
+Updated by Mark Martinec, based on suggestion
+in http://bugs.debian.org/213422 from Enrico

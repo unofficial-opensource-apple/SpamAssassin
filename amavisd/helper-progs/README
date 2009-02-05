@@ -1,7 +1,7 @@
-Postfix and Exim v4
-===================
+Last updated: 2003-11-04
 
-You have come to the wrong subdirectory,
+If using Postfix or Exim v4 or dual-sendmail setup,
+you came to the wrong subdirectory,
 no helper programs are needed.
 
 
@@ -18,8 +18,22 @@ For sendmail milter setup, please use the usual procedure:
 
 This should produce the program amavis-milter.
 
-Follow the instructions in README.milter for
-integrating it with sendmail.
+Follow the instructions in README.milter for integrating it with sendmail.
+
+There are two source code version of the program amavis-milter.c
+available in this distribution. The older, based on 1.1.2.3.2.36, was
+distributed with amavisd-new up to the version amavisd-new-20030616-p5.
+
+The amavis-milter.c is currently being maintained by Lars Hecking. 
+The 1.1.2.3.2.40 -based version is now the default (via soft link)
+starting with amavisd-new-20030616-p6. There are some minor differences
+in command-line options, otherwise both should work with amavisd-new.
+
+Start it as 'amavis-milter -h' to get the up-to-date list of options!
+
+The new version has better error handling and logging to syslog.
+If there are problems with newer version, please revert to the older one.
+
 
 Thanks to Stephane Lentz for providing the
 configure.in/Makefile.in for this version.

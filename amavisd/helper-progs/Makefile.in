@@ -15,20 +15,17 @@ DEFS=-D_POSIX_PTHREAD_SEMANTICS
 
 all: amavis-milter amavis
 
-unstripped: FORCE
-	$(MAKE) all DONT_STRIP=1
-
+amavis-milter.c:
+	ln -sf amavis-milter-based-on-1.1.2.3.2.40-v2.c amavis-milter.c
 
 amavis-milter: amavis-milter.o 
-	@CC@ @CFLAGS@ @PTHREAD_FLAG@ -o amavis-milter amavis-milter.o @LIBMILTER@ @LIBS@
-	-test "$(DONT_STRIP)" != "1" && strip amavis-milter
+	@CC@ @CFLAGS@ @LDFLAGS@ @PTHREAD_FLAG@ -o amavis-milter amavis-milter.o @LIBMILTER@ @LIBS@
 
 amavis-milter.o: amavis-milter.c 
 	@CC@ @CFLAGS@ @PTHREAD_FLAG@ $(DEFS) $(MINCLUDE) -c -o amavis-milter.o amavis-milter.c
 
 amavis: amavis.o
-	@CC@ @CFLAGS@ -o amavis amavis.o @LIBS@
-	-test "$(DONT_STRIP)" != "1" && strip amavis-milter
+	@CC@ @CFLAGS@ @LDFLAGS@ -o amavis amavis.o @LIBS@
 
 amavis.o: amavis.c
 	@CC@ @CFLAGS@   $(DEFS) -c -o amavis.o amavis.c
@@ -39,6 +36,7 @@ install:
 
 clean:: FORCE
 	rm -f *~ *.o amavis-milter amavis
+	[ -L amavis-milter.c ] && rm -f amavis-milter.c
 
 distclean:: clean
 	rm -f config.log config.status Makefile config.cache config.h amavis-milter amavis
