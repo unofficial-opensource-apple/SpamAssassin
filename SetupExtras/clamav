@@ -1,0 +1,13 @@
+#/bin/sh
+#
+# Configure Clam AV 
+#
+echo "Configuring Anti-Virus scanner..."
+_log_file=/var/log/clam-update.log
+if [ ! -e ${_log_file} ]; then
+	touch ${_log_file}
+	chmod 644 ${_log_file}
+	chown clamav ${_log_file}
+fi
+echo "done."
+

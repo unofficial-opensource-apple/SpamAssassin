@@ -1,0 +1,169 @@
+amavisd-new consists of the daemon, and optionally some helper programs,
+which are only needed in setups with certain mail transport agents (MTA).
+
+Obtaining the software:
+=======================
+
+Fetch the tarball and unpack it:
+  wget http://www.ijs.si/software/amavisd/amavisd-new-<version>.tar.gz
+  gzip -d -c amavisd-new-<version>.tar.gz | tar xvf -
+  cd amavisd-new-<version>
+
+Checking the web page http://www.ijs.si/software/amavisd/ if there are
+any any required patches, fetch and apply them, e.g.:
+  wget http://www.ijs.si/software/amavisd/amavisd-new-<version>-1.patch
+  patch < amavisd-new-<version>-1.patch
+(or grab the tar file with patches already applied, if available).
+
+The most important files you obtained (and patched if necessary)
+are amavisd and amavisd.conf.
+
+Start reading with AAAREADME.first, then RELEASE_NOTES and INSTALL.
+
+
+Prerequisites:
+==============
+
+file(1) utility is required
+(please use file(1) 3.41 or later for security reasons!)
+
+Archive::Tar   (Archive-Tar-x.xx)
+Archive::Zip   (Archive-Zip-x.xx)
+Compress::Zlib (Compress-Zlib-x.xx)
+Convert::TNEF  (Convert-TNEF-x.xx)
+Convert::UUlib (Convert-UUlib-x.xxx)
+MIME::Base64   (MIME-Base64-x.xx)
+MIME::Parser   (MIME-Tools-x.xxxx)
+( the patched MIME-tools by David F. Skoll is recommended over 5.411,
+  as it better handles broken/bad MIME syntax:
+  http://www.mimedefang.org/ -> Download section )
+Mail::Internet (MailTools-1.58 or later have workarounds for Perl 5.8.0 bugs)
+Net::Server    (Net-Server-x.xx)
+Net::SMTP      (libnet-x.xx)
+Digest::MD5    (Digest-MD5-x.xx)
+IO::Stringy    (IO-stringy-x.xxx)
+Time::HiRes    (Time-HiRes-x.xx)
+Unix::Syslog   (Unix-Syslog-x.xxx)
+
+The following external programs are used for decoding/unarchiving
+if they are available:
+  compress, gzip, bzip2, nomarch (or arc), lha, arj (or unarj), rar (unrar),
+  zoo, cpio, lzop, freeze (or unfreeze or melt).
+
+optional:
+  virus scanners               for doing virus scanning
+  Mail::SpamAssassin           for doing spam scanning
+  DBI with appropriate DBD::*  if using SQL lookups
+  Net::LDAP                    if using LDAP lookups
+
+
+Installing the daemon:
+======================
+
+- Perl version 5.005 or later is needed. At the moment Perl 5.6.1
+  seems the most predictable. If UTF8/Unicode Perl support is needed,
+  use 5.8.0 (or later), and make sure to use the most recent MailTools).
+
+- create (or choose) a Unix group dedicated to run amavisd daemon
+  and possibly some virus scanners. This should NOT be one of the
+  user or system groups, and not shared with your mailer. It is
+  customary to name the group 'amavis' (or perhaps 'sweep');
+    (edit /etc/group, or use system-specific tools, such as vigr)
+
+- create (or choose) a Unix account (username and its UID) dedicated to run
+  amavisd daemon and possibly some virus scanners. This should NOT be one
+  of the system or regular user accounts, and not shared with your mailer
+  (most certainly do not use "root", and do not use "nobody" or account used
+  by your mailer, such as "postfix", "smmsp" or "mailnull"). It is customary
+  to name the user 'amavis' or 'vscan';
+
+  Choose a home directory (e.g. /var/amavis or /var/lib/amavis) for this user.
+
+    (use vipw, or system-specific tools to add a user)
+
+  Create its home directory, unless account creation procedure already did it.
+    mkdir /var/amavis
+
+  Check or set the ownership and protection of the directory to be readable
+  and writable by the chosen UID, and not writable by other non-privileged
+  users;
+    chown amavis:amavis /var/amavis
+    chmod 750 /var/amavis
+
+- unpack the source distribution (see 'Obtaining the software' above),
+  and cd to the created directory;
+
+- copy file amavisd to wherever you want it to reside,
+  such as /usr/local/sbin, and make sure its protection setting allows it
+  to be executed, but not overwritten by nonprivileged users.
+  This is a Perl source, so it is readable by any text viewer if needed.
+  It is heavily commented, in case you would need more information.
+    cp amavisd /usr/local/sbin/
+    chown root /usr/local/sbin/amavisd
+    chmod 755  /usr/local/sbin/amavisd
+
+- copy file amavisd.conf to whereever you want it to reside,
+  such as /etc/, and make sure it is not writable by non-privileged users;
+    cp amavisd.conf /etc/
+    chown root /etc/amavisd.conf
+    chmod 644  /etc/amavisd.conf
+
+  Some sites prefer the location /etc/amavis/amavisd.conf. If using a
+  non-default location, one may use the command line option -c when
+  starting the daemon to specify a non-default configuration file.
+
+- create a directory (e.g. /var/virusmails) to be used by amavisd-new
+  as a quarantine area (if you want a virus or spam quarantine).
+  Set the ownership and protection of the directory to be readable
+  and writable by the chosen UID, and not writable by other nonprivileged
+  users;
+    mkdir /var/virusmails
+    chown amavis:amavis /var/virusmails
+    chmod 750 /var/virusmails
+
+- edit file /etc/amavisd.conf and adjust variables $daemon_group
+  and $daemon_user to match the chosen group and user name,
+  adjust variables $MYHOME, $TEMPBASE and $QUARANTINEDIR to match
+  the directories just created, then check/adjust other variables,
+  especially those in 'Section I', including $mydomain.
+
+- install virus scanners (if you will be using them), and Perl module
+  SpamAssassin (if you want it), and adjust variables in /etc/amavisd.conf,
+  especially in the last section 'Section VII'; There are several other
+  Perl modules needed by amavisd daemon (see 'Prerequisites') - if you
+  don't already have them installed you will get a list of missing modules
+  when amavisd is started;
+
+- start the program 'amavisd', either as root, or with su(1) as the user
+  chosen above. It should start up and (if root) change its GID/UID to the
+  value you provided. It is wise to start it up for the first time with
+  a 'debug' option:
+    /usr/local/sbin/amavisd debug
+
+- later when everything has been tested and works, you may use the shell
+  script amavisd_init.sh to be invoked at system startup/shutdown time;
+
+- you may find the utility program 'amavisdconf' useful, especially
+  if you are accustomed to the Postfix utility 'postconf' (sorry, not
+  available with all versions);
+
+- depending on the mailer you use, read the appropriate README.* file
+  and follow instructions there. With some mailers (Postfix, Exim V4
+  or a dual-MTA setup with any SMTP-capable mailers, including sendmail)
+  you don't need anything else (no helper programs).
+
+  With some other mailers (sendmail milter, or historical sendmail invoking
+  content filter via local delivery agent) you need additional helper
+  programs: amavisd-milter.c, or amavis.c respectively. They are available
+  from the helper-progs subdirectory.
+
+
+Testing the daemon:
+===================
+
+First checkout is described in MTA-specific README.* file,
+please follow the instructions there.
+
+When you think you have a working installation, go to a subdirectory
+test-messages, which contains a couple of sample mail messages,
+and follow the instructions in README there.

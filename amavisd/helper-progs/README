@@ -1,0 +1,40 @@
+Postfix and Exim v4
+===================
+
+You have come to the wrong subdirectory,
+no helper programs are needed.
+
+
+sendmail with milter
+====================
+
+For sendmail milter setup, please use the usual procedure:
+
+  check the configure options: ./configure --help
+
+  ./configure
+  make
+  make install
+
+This should produce the program amavis-milter.
+
+Follow the instructions in README.milter for
+integrating it with sendmail.
+
+Thanks to Stephane Lentz for providing the
+configure.in/Makefile.in for this version.
+
+
+older sendmail without milter
+=============================
+
+To compile just the older amavis(.c) helper program
+without the benefit of the sendmail library and configure/make,
+please:
+- copy config.h.in to config.h
+- edit config.h, adjusting the few variables as needed
+- compile the program, e.g. gcc -o amavis amavis.c
+  and copy it to wherever you would like to have it
+
+Follow the instructions in README.sendmail for
+integrating it with sendmail.
